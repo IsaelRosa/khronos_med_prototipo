@@ -72,6 +72,18 @@ npm run build
 npm start
 ```
 
+### Agenda
+
+A agenda busca pacientes e usuários com o perfil `medico` no banco e salva os agendamentos pela API. No agendamento, selecione **Iniciar atendimento** para criar ou retomar um rascunho SOAP; o prontuário exibe as notas por paciente. A seleção de unidade e a lista de espera ainda usam dados do protótipo. Agendamentos e notas antigos salvos apenas no navegador não são migrados automaticamente.
+
+Ao abrir um paciente ou suas notas, os agendamentos relacionados são listados independentemente da data e da unidade exibidas no calendário. É possível iniciar ou retomar um atendimento elegível, ou abrir a agenda e criar um agendamento com o paciente pré-selecionado. Prescrições, exames e financeiro ainda não estão integrados à tela do paciente.
+
+O atendimento permite apenas salvar rascunhos. Assinatura certificada e encerramento não estão disponíveis; salvar o rascunho não finaliza a consulta nem gera lançamento financeiro.
+
+**Limitação de segurança:** a API ainda não restringe a leitura de informações clínicas pelo vínculo do profissional com o paciente, e o cadastro público aceita o perfil informado. Não utilize dados clínicos reais até que os controles de acesso e a proteção operacional sejam implementados e validados. O protótipo, por si só, não comprova conformidade com a LGPD ou com normas profissionais.
+
+Para testar a persistência existente sem usar o banco da aplicação, execute `node --test tests\isolated-flow.test.cjs` dentro de `backend`. O teste cria e remove um banco exclusivo com dados de teste; o usuário configurado em `DATABASE_URL` precisa ter permissão `CREATEDB`.
+
 ## 📚 API Endpoints
 
 ### Autenticação
@@ -195,7 +207,11 @@ Authorization: Bearer {token}
 
 ### Notas SOAP
 
-#### Criar Nota SOAP
+#### Rascunho vinculado ao atendimento
+
+`GET /api/soap/appointment/{appointmentId}` retorna a nota e sua `version`, ou `null` quando ainda não existe. `PUT /api/soap/appointment/{appointmentId}/draft` salva todos os campos clínicos como strings e exige `expectedVersion`: `null` na primeira gravação ou a `version` recebida anteriormente. Alterações concorrentes são rejeitadas com HTTP 409. A nota pertence ao usuário autenticado, e a gravação, o status do agendamento e a auditoria são atômicos.
+
+#### Criar Nota SOAP sem agendamento
 ```http
 POST /api/soap
 Authorization: Bearer {token}
@@ -203,7 +219,6 @@ Content-Type: application/json
 
 {
   "patientId": "uuid",
-  "appointmentId": "uuid",
   "queixa": "Dor de cabeça",
   "hda": "Há 3 dias",
   "antecedentes": "Migrânea",
@@ -241,6 +256,8 @@ Authorization: Bearer {token}
 ```
 
 #### Atualizar Nota SOAP
+Para notas vinculadas a agendamentos, use a rota de rascunho acima.
+
 ```http
 PUT /api/soap/{id}
 Authorization: Bearer {token}
@@ -258,9 +275,7 @@ POST /api/soap/{id}/sign
 Authorization: Bearer {token}
 ```
 
-**Notas:**
-- Uma nota assinada não pode ser editada ou deletada
-- Apenas o médico que criou a nota pode assiná-la
+Este endpoint responde HTTP 501: assinatura certificada ainda não foi implementada. Notas previamente marcadas como assinadas não podem ser editadas ou deletadas.
 
 #### Deletar Nota SOAP
 ```http
@@ -271,6 +286,7 @@ Authorization: Bearer {token}
 **Restrições:**
 - Apenas notas não assinadas podem ser deletadas
 - Apenas o médico que criou a nota pode deletá-la
+- Notas vinculadas a atendimentos não podem ser deletadas por esta rota
 
 ## 🔐 Segurança
 
@@ -281,7 +297,7 @@ Authorization: Bearer {token}
 ### Permissões por Função
 - **Público:** Sem acesso a endpoints protegidos
 - **Recepcionista:** Apenas leitura de pacientes
-- **Médico:** Criar/editar/assinar notas SOAP
+- **Médico:** Criar e editar rascunhos de notas SOAP
 - **Admin:** Acesso total exceto criar pacientes
 - **SuperAdmin:** Acesso total
 
@@ -334,7 +350,6 @@ Logs são exibidos no console durante desenvolvimento. Em produção, implementa
 - [ ] Upload de arquivos (anexos nas notas)
 - [ ] Certificado digital para assinatura eletrônica
 - [ ] Integração com wearables
-- [ ] Endpoints de agendamentos
 - [ ] Endpoints de prescrições
 - [ ] Endpoints de exames
 - [ ] Sistema de pagamentos

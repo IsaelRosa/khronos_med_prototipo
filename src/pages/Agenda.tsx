@@ -1,24 +1,46 @@
-import { useMemo, useState } from 'react';
-import { useStore, actions } from '../lib/store';
+import { useEffect, useMemo, useState } from 'react';
+import { useStore } from '../lib/store';
+import { appointments as appointmentsAPI, patients as patientsAPI } from '../lib/api';
+import type { AppointmentResponse, PatientResponse } from '../lib/api';
 import { Card, PageHeader, Button, Modal, Field, inputCls, textareaCls, selectCls, Badge } from '../components/ui';
 import { STATUS_META } from '../lib/statuses';
 import { addDays, cls, fmtDateLong, todayISO } from '../lib/utils';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, CalendarDays, CalendarRange,
-  List, Clock, Ban, UserPlus, Phone, MessageSquare, Video, Filter
+  List, Clock, Ban, Phone, MessageSquare, Video, Filter
 } from 'lucide-react';
 import type { AppointmentStatus, Appointment } from '../lib/types';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import PatientAppointments from '../components/PatientAppointments';
 
 type View = 'dia'|'semana'|'mes';
+type AgendaProfessional = { id: string; name: string };
+
+function toAppointment(a: AppointmentResponse): Appointment {
+  const status = a.status === 'concluido' ? 'atendido' : a.status === 'nao_compareceu' ? 'falta' : a.status;
+  if (!(status in STATUS_META)) throw new Error(`Status de agendamento inválido: ${status}`);
+  return {
+    id: a.id, patientId: a.patient_id, professionalId: a.professional_id,
+    unitId: a.unit_id, date: a.date.slice(0, 10),
+    start: a.start_time.slice(0, 5), end: a.end_time.slice(0, 5),
+    type: a.type, insurance: a.insurance, procedure: a.procedure,
+    value: a.value == null ? undefined : Number(a.value),
+    payment: a.payment_method ?? undefined, status, notes: a.notes,
+    teleUrl: a.telehealth_url,
+  };
+}
 
 const HOURS = Array.from({length: 11}, (_, i) => 8 + i); // 8 - 18
 
 export default function Agenda() {
   const navigate = useNavigate();
-  const appointments = useStore(s => s.appointments);
-  const patients = useStore(s => s.patients);
-  const professionals = useStore(s => s.professionals);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const contextPatientId = searchParams.get('patientId');
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [patients, setPatients] = useState<PatientResponse[]>([]);
+  const [professionals, setProfessionals] = useState<AgendaProfessional[]>([]);
+  const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
+  const [loadedKey, setLoadedKey] = useState('');
   const waitlist = useStore(s => s.waitlist);
   const units = useStore(s => s.units);
   const activeUnitId = useStore(s => s.activeUnitId);
@@ -28,8 +50,32 @@ export default function Agenda() {
   const [professionalFilter, setProfessionalFilter] = useState<string>('all');
   const [newOpen, setNewOpen] = useState(false);
   const [newSlot, setNewSlot] = useState<{ date: string; start: string } | null>(null);
-  const [selected, setSelected] = useState<Appointment | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [waitOpen, setWaitOpen] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const loadKey = `${date}:${refresh}`;
+  const ready = loadedKey === loadKey;
+  const contextPatient = patients.find(p => p.id === contextPatientId);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      patientsAPI.list(),
+      appointmentsAPI.listProfessionals(),
+      appointmentsAPI.listByDateRange(addDays(date, -42), addDays(date, 42)),
+    ]).then(([patientData, professionalData, appointmentData]) => {
+      if (!active) return;
+      setPatients(patientData);
+      setProfessionals(professionalData);
+      setAppointments(appointmentData.map(toAppointment));
+      setLoadedKey(loadKey);
+    }).catch((error: unknown) => {
+      if (!active) return;
+      console.error('Erro ao carregar agenda:', error);
+      setLoadError({ key: loadKey, message: error instanceof Error ? error.message : 'Erro ao carregar agenda.' });
+    });
+    return () => { active = false; };
+  }, [date, loadKey]);
 
   const filtered = useMemo(() => {
     return appointments.filter(a => {
@@ -42,6 +88,7 @@ export default function Agenda() {
   const dayAppts = useMemo(() => filtered.filter(a => a.date === date).sort((a,b) => a.start.localeCompare(b.start)), [filtered, date]);
 
   function openNew(d: string, start: string) {
+    if (!ready) return;
     setNewSlot({ date: d, start });
     setNewOpen(true);
   }
@@ -52,8 +99,30 @@ export default function Agenda() {
         <Button variant="secondary" size="sm" icon={<List className="size-4" />} onClick={() => setWaitOpen(true)}>
           Lista de espera <Badge tone="honey" className="ml-1">{waitlist.length}</Badge>
         </Button>
-        <Button size="sm" icon={<Plus className="size-4" />} onClick={() => openNew(date, '09:00')}>Novo agendamento</Button>
+        <Button size="sm" icon={<Plus className="size-4" />} disabled={!ready} onClick={() => openNew(date, '09:00')}>Novo agendamento</Button>
       </PageHeader>
+
+      {contextPatientId && (
+        <div className="mb-4 space-y-3">
+          {!ready ? (
+            <Card className="p-5">{loadError?.key === loadKey ? 'Não foi possível identificar o paciente.' : 'Carregando paciente...'}</Card>
+          ) : !contextPatient ? (
+            <Card className="p-5 text-flame-600">Paciente não encontrado. <Link className="underline" to="/pacientes">Ver pacientes</Link></Card>
+          ) : (
+            <>
+              <Card className="p-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-ink-800">Paciente: {contextPatient.name}</div>
+                  <p className="text-sm text-ink-500">Os agendamentos abaixo incluem todas as datas e unidades.</p>
+                  <Link className="text-sm text-brand-700 hover:underline" to={`/prontuarios?patientId=${encodeURIComponent(contextPatient.id)}`}>Voltar às notas</Link>
+                </div>
+                <Button size="sm" onClick={() => openNew(date, '09:00')}>Agendar para este paciente</Button>
+              </Card>
+              <PatientAppointments patientId={contextPatient.id} refreshKey={refresh} showScheduleAction={false} />
+            </>
+          )}
+        </div>
+      )}
 
       {/* Toolbar */}
       <Card className="p-3 mb-4 flex flex-wrap items-center gap-3">
@@ -89,17 +158,21 @@ export default function Agenda() {
         <select value={professionalFilter} onChange={e => setProfessionalFilter(e.target.value)}
           className={cls(selectCls, 'w-auto min-w-48 h-9')}>
           <option value="all">Todos os profissionais</option>
-          {professionals.map(p => <option key={p.id} value={p.id}>{p.name} · {p.specialty}</option>)}
+          {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
 
         <Button variant="secondary" size="sm" icon={<Filter className="size-4" />}>Mais filtros</Button>
       </Card>
 
+      {loadError?.key === loadKey && <Card className="p-4 mb-4 text-flame-600">Erro ao carregar agenda: {loadError.message} <button className="underline" onClick={() => setRefresh(n => n + 1)}>Tentar novamente</button></Card>}
+
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 xl:col-span-9">
-          {view === 'dia' && <DayView date={date} appointments={dayAppts} onNew={openNew} onSelect={setSelected} />}
-          {view === 'semana' && <WeekView date={date} appointments={filtered} onNew={openNew} onSelect={setSelected} />}
-          {view === 'mes' && <MonthView date={date} appointments={filtered} onSelectDay={(d) => { setDate(d); setView('dia'); }} />}
+          {!ready ? <Card className="p-5">{loadError?.key === loadKey ? 'Agenda indisponível.' : 'Carregando agenda...'}</Card> : <>
+            {view === 'dia' && <DayView date={date} appointments={dayAppts} patients={patients} onNew={openNew} onSelect={a => setSelectedId(a.id)} />}
+            {view === 'semana' && <WeekView date={date} appointments={filtered} patients={patients} onNew={openNew} onSelect={a => setSelectedId(a.id)} />}
+            {view === 'mes' && <MonthView date={date} appointments={filtered} onSelectDay={(d) => { setDate(d); setView('dia'); }} />}
+          </>}
         </div>
 
         <div className="col-span-12 xl:col-span-3 space-y-4">
@@ -150,17 +223,28 @@ export default function Agenda() {
       </div>
 
       {/* New appointment */}
-      <NewAppointmentModal
+      {newOpen && <NewAppointmentModal
         open={newOpen}
         onClose={() => { setNewOpen(false); setNewSlot(null); }}
         initialSlot={newSlot}
-      />
+        patients={patients}
+        professionals={professionals}
+        initialPatient={contextPatient ?? null}
+        onSaved={a => {
+          if (contextPatientId) setSearchParams({ patientId: a.patientId });
+          setDate(a.date);
+          setRefresh(n => n + 1);
+        }}
+      />}
 
       {/* Detail */}
       <AppointmentDetailModal
-        appt={selected}
-        onClose={() => setSelected(null)}
-        onStart={() => selected && navigate(`/atendimento/${selected.id}`)}
+        appt={appointments.find(a => a.id === selectedId) ?? null}
+        patients={patients}
+        professionals={professionals}
+        onClose={() => setSelectedId(null)}
+        onUpdated={a => setAppointments(items => items.map(item => item.id === a.id ? a : item))}
+        onStart={id => navigate(`/atendimento/${id}`)}
       />
 
       {/* Waitlist */}
@@ -169,11 +253,9 @@ export default function Agenda() {
   );
 }
 
-function DayView({ date, appointments, onNew, onSelect }:{
-  date: string; appointments: Appointment[]; onNew: (d:string,h:string)=>void; onSelect:(a:Appointment)=>void;
+function DayView({ date, appointments, patients, onNew, onSelect }:{
+  date: string; appointments: Appointment[]; patients: PatientResponse[]; onNew: (d:string,h:string)=>void; onSelect:(a:Appointment)=>void;
 }) {
-  const patients = useStore(s => s.patients);
-  const professionals = useStore(s => s.professionals);
   const now = new Date();
   const isToday = date === todayISO();
   const nowTop = (now.getHours() - 8) * 72 + (now.getMinutes()/60)*72;
@@ -207,7 +289,6 @@ function DayView({ date, appointments, onNew, onSelect }:{
           )}
           {appointments.map(a => {
             const p = patients.find(x => x.id === a.patientId);
-            const pr = professionals.find(x => x.id === a.professionalId);
             const [sh, sm] = a.start.split(':').map(Number);
             const [eh, em] = a.end.split(':').map(Number);
             const top = (sh - 8)*72 + (sm/60)*72;
@@ -216,14 +297,14 @@ function DayView({ date, appointments, onNew, onSelect }:{
             return (
               <button key={a.id} onClick={() => onSelect(a)}
                 className={cls('absolute left-2 right-3 rounded-lg px-3 py-2 text-left overflow-hidden ring-1 hover:shadow-md transition', st.bg, st.ring)}
-                style={{ top, height, borderLeft: `4px solid ${pr?.color}` }}>
+                style={{ top, height }}>
                 <div className="flex items-center gap-2">
                   <span className={cls('size-1.5 rounded-full', st.dot)} />
                   <div className="text-[11px] font-mono text-ink-600">{a.start}–{a.end}</div>
                   {a.type === 'teleconsulta' && <Video className="size-3 text-brand-500" />}
                 </div>
                 <div className="text-sm font-semibold text-ink-800 truncate mt-0.5">{p?.name}</div>
-                <div className="text-[11px] text-ink-500 truncate">{a.procedure} · {pr?.specialty}</div>
+                <div className="text-[11px] text-ink-500 truncate">{a.procedure}</div>
               </button>
             );
           })}
@@ -233,11 +314,9 @@ function DayView({ date, appointments, onNew, onSelect }:{
   );
 }
 
-function WeekView({ date, appointments, onNew, onSelect }:{
-  date: string; appointments: Appointment[]; onNew:(d:string,h:string)=>void; onSelect:(a:Appointment)=>void;
+function WeekView({ date, appointments, patients, onNew, onSelect }:{
+  date: string; appointments: Appointment[]; patients: PatientResponse[]; onNew:(d:string,h:string)=>void; onSelect:(a:Appointment)=>void;
 }) {
-  const patients = useStore(s => s.patients);
-  const professionals = useStore(s => s.professionals);
   const d = new Date(date+'T00:00:00');
   const start = new Date(d); start.setDate(d.getDate() - d.getDay());
   const days = Array.from({length:7}, (_,i) => {
@@ -270,7 +349,6 @@ function WeekView({ date, appointments, onNew, onSelect }:{
             ))}
             {appointments.filter(a => a.date === iso).map(a => {
               const p = patients.find(x => x.id === a.patientId);
-              const pr = professionals.find(x => x.id === a.professionalId);
               const [sh, sm] = a.start.split(':').map(Number);
               const [eh, em] = a.end.split(':').map(Number);
               const top = (sh - 8)*56 + (sm/60)*56;
@@ -279,7 +357,7 @@ function WeekView({ date, appointments, onNew, onSelect }:{
               return (
                 <button key={a.id} onClick={() => onSelect(a)}
                   className={cls('absolute left-1 right-1 rounded px-1.5 py-1 text-left overflow-hidden ring-1 hover:shadow-md transition', st.bg, st.ring)}
-                  style={{top, height, borderLeft: `3px solid ${pr?.color}`}}>
+                  style={{top, height}}>
                   <div className="text-[9px] font-mono text-ink-600">{a.start}</div>
                   <div className="text-[10px] font-semibold text-ink-800 truncate leading-tight">{p?.name.split(' ').slice(0,2).join(' ')}</div>
                 </button>
@@ -371,18 +449,16 @@ function MiniCalendar({ selected, onSelect }:{ selected: string; onSelect:(d:str
   );
 }
 
-function NewAppointmentModal({ open, onClose, initialSlot }:{
+function NewAppointmentModal({ open, onClose, initialSlot, patients, professionals, initialPatient, onSaved }:{
   open: boolean; onClose: () => void; initialSlot: { date: string; start: string } | null;
+  patients: PatientResponse[]; professionals: AgendaProfessional[]; initialPatient: PatientResponse | null; onSaved: (a: Appointment) => void;
 }) {
-  const patients = useStore(s => s.patients);
-  const professionals = useStore(s => s.professionals);
   const units = useStore(s => s.units);
   const activeUnitId = useStore(s => s.activeUnitId);
-  const appointments = useStore(s => s.appointments);
 
-  const [patientId, setPatientId] = useState('');
-  const [patientQuery, setPatientQuery] = useState('');
-  const [professionalId, setProfessionalId] = useState('p1');
+  const [patientId, setPatientId] = useState(initialPatient?.id ?? '');
+  const [patientQuery, setPatientQuery] = useState(initialPatient?.name ?? '');
+  const [professionalId, setProfessionalId] = useState(professionals[0]?.id ?? '');
   const [unitId, setUnitId] = useState(activeUnitId);
   const [date, setDate] = useState(initialSlot?.date || todayISO());
   const [start, setStart] = useState(initialSlot?.start || '09:00');
@@ -394,58 +470,70 @@ function NewAppointmentModal({ open, onClose, initialSlot }:{
   const [payment, setPayment] = useState<Appointment['payment']>('particular');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const patientResults = patientQuery.length >= 2
-    ? patients.filter(p => p.name.toLowerCase().includes(patientQuery.toLowerCase())).slice(0,5)
+  const query = patientQuery.trim().toLowerCase();
+  const patientResults = query.length >= 2
+    ? patients.filter(p => [p.name, p.cpf, p.code].some(field => field?.toLowerCase().includes(query))).slice(0,5)
     : [];
 
-  function save() {
+  async function save() {
     setError('');
-    if (!patientId) { setError('Selecione um paciente'); return; }
+    if (!patientId) { setError('Selecione um paciente na lista de resultados.'); return; }
+    if (!professionalId) { setError('Selecione um profissional cadastrado.'); return; }
+    if (!date || !start || !Number.isInteger(duration) || duration <= 0) {
+      setError('Informe uma data, horário e duração válidos.'); return;
+    }
     const [sh, sm] = start.split(':').map(Number);
     const endMin = sh*60 + sm + duration;
+    if (endMin >= 24 * 60) { setError('O agendamento deve terminar no mesmo dia.'); return; }
     const end = `${Math.floor(endMin/60).toString().padStart(2,'0')}:${(endMin%60).toString().padStart(2,'0')}`;
-    // conflict check
-    const conflict = appointments.find(a =>
-      a.date === date && a.professionalId === professionalId && a.status !== 'cancelado' &&
-      (start < a.end && end > a.start)
-    );
-    if (conflict) { setError('Conflito de horário com outro agendamento deste profissional.'); return; }
-    actions.addAppointment({
-      patientId, professionalId, unitId, date, start, end, type, insurance, procedure, value, payment,
-      status:'agendado', notes
-    });
-    onClose();
+    setSaving(true);
+    try {
+      const saved = await appointmentsAPI.create({
+        patient_id: patientId, professional_id: professionalId, unit_id: unitId,
+        date, start_time: start, end_time: end, type, insurance, procedure,
+        value, payment_method: payment, notes,
+      });
+      onSaved(toAppointment(saved));
+      onClose();
+    } catch (err: unknown) {
+      console.error('Erro ao salvar agendamento:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao salvar agendamento.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Novo agendamento" size="xl">
+    <Modal open={open} onClose={() => { if (!saving) onClose(); }} title="Novo agendamento" size="xl">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <Field label="Paciente">
             <div className="relative">
-              <input value={patientQuery || (patients.find(p => p.id === patientId)?.name ?? '')} onChange={e => { setPatientQuery(e.target.value); setPatientId(''); }}
+              <input value={patientQuery} onChange={e => { setPatientQuery(e.target.value); setPatientId(''); }}
                 placeholder="Buscar por nome, CPF ou código" className={inputCls} />
               {patientResults.length > 0 && !patientId && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-lg shadow-lg ring-1 ring-ink-100 z-10 max-h-56 overflow-auto">
                   {patientResults.map(p => (
-                    <button key={p.id} onClick={() => { setPatientId(p.id); setPatientQuery(p.name); }}
+                    <button key={p.id} onClick={() => { setPatientId(p.id); setPatientQuery(p.name); setError(''); }}
                       className="w-full text-left px-3 py-2 hover:bg-ink-50 text-sm flex items-center justify-between">
                       <span>{p.name}</span>
-                      <span className="text-xs text-ink-400 font-mono">{p.code}</span>
+                      <span className="text-xs text-ink-400 font-mono">{p.code || p.cpf}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <button className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-600 text-xs flex items-center gap-1 px-2 h-7 rounded hover:bg-brand-50">
-                <UserPlus className="size-3.5" /> Novo
-              </button>
             </div>
+            {!patientId && query.length >= 2 && patientResults.length === 0 && <span className="text-xs text-ink-500">Nenhum paciente encontrado.</span>}
+            {!patientId && patientResults.length > 0 && <span className="text-xs text-ink-500">Selecione o paciente na lista.</span>}
+            {patientId && <span className="text-xs text-grass-600">Paciente selecionado.</span>}
           </Field>
         </div>
 
         <Field label="Profissional"><select value={professionalId} onChange={e => setProfessionalId(e.target.value)} className={selectCls}>
-          {professionals.map(p => <option key={p.id} value={p.id}>{p.name} · {p.specialty}</option>)}
+          {professionals.length === 0 && <option value="">Nenhum médico cadastrado</option>}
+          {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select></Field>
 
         <Field label="Unidade"><select value={unitId} onChange={e => setUnitId(e.target.value)} className={selectCls}>
@@ -455,7 +543,7 @@ function NewAppointmentModal({ open, onClose, initialSlot }:{
         <Field label="Data"><input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} /></Field>
         <Field label="Horário início"><input type="time" value={start} onChange={e => setStart(e.target.value)} className={inputCls} /></Field>
 
-        <Field label="Duração (min)"><input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value)||30)} className={inputCls} /></Field>
+        <Field label="Duração (min)"><input type="number" min="1" value={duration} onChange={e => setDuration(Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Tipo"><select value={type} onChange={e => setType(e.target.value as Appointment['type'])} className={selectCls}>
           <option value="consulta">Consulta</option>
           <option value="retorno">Retorno</option>
@@ -481,23 +569,38 @@ function NewAppointmentModal({ open, onClose, initialSlot }:{
       </div>
       {error && <div className="mt-3 p-3 bg-rose-50 text-flame-600 text-sm rounded-lg flex items-center gap-2"><Ban className="size-4" /> {error}</div>}
       <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-ink-100">
-        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button onClick={save} icon={<Plus className="size-4" />}>Salvar agendamento</Button>
+        <Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button>
+        <Button onClick={save} disabled={saving} icon={<Plus className="size-4" />}>{saving ? 'Salvando...' : 'Salvar agendamento'}</Button>
       </div>
     </Modal>
   );
 }
 
-function AppointmentDetailModal({ appt, onClose, onStart }:{
-  appt: Appointment | null; onClose: ()=>void; onStart: ()=>void;
+function AppointmentDetailModal({ appt, patients, professionals, onClose, onUpdated, onStart }:{
+  appt: Appointment | null; patients: PatientResponse[]; professionals: AgendaProfessional[];
+  onClose: ()=>void; onUpdated: (a: Appointment) => void; onStart: (id: string) => void;
 }) {
-  const patients = useStore(s => s.patients);
-  const professionals = useStore(s => s.professionals);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   if (!appt) return null;
   const p = patients.find(x => x.id === appt.patientId);
   const pr = professionals.find(x => x.id === appt.professionalId);
   const st = STATUS_META[appt.status];
   const statuses: AppointmentStatus[] = ['agendado','confirmado','aguardando','em_atendimento','atendido','falta','cancelado'];
+  async function updateStatus(status: AppointmentStatus) {
+    if (!appt) return;
+    setError('');
+    setSaving(true);
+    try {
+      const updated = await appointmentsAPI.update(appt.id, { status });
+      onUpdated(toAppointment(updated));
+    } catch (err: unknown) {
+      console.error('Erro ao atualizar agendamento:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar agendamento.');
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
     <Modal open={!!appt} onClose={onClose} title="Detalhes do agendamento" size="lg">
       <div className="flex items-start gap-4 pb-4 border-b border-ink-100">
@@ -518,7 +621,7 @@ function AppointmentDetailModal({ appt, onClose, onStart }:{
       </div>
 
       <div className="grid grid-cols-2 gap-4 py-4 text-sm">
-        <div><div className="text-xs text-ink-400">Profissional</div><div className="text-ink-800 font-medium">{pr?.name}</div><div className="text-xs text-ink-500">{pr?.specialty} · {pr?.crm}</div></div>
+        <div><div className="text-xs text-ink-400">Profissional</div><div className="text-ink-800 font-medium">{pr?.name}</div></div>
         <div><div className="text-xs text-ink-400">Horário</div><div className="text-ink-800 font-medium"><Clock className="size-3.5 inline mr-1 text-ink-400" />{appt.start} – {appt.end}</div></div>
         <div><div className="text-xs text-ink-400">Procedimento</div><div className="text-ink-800">{appt.procedure}</div></div>
         <div><div className="text-xs text-ink-400">Valor</div><div className="text-ink-800 font-semibold">{appt.value ? appt.value.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'}</div></div>
@@ -531,7 +634,7 @@ function AppointmentDetailModal({ appt, onClose, onStart }:{
           {statuses.map(s => {
             const m = STATUS_META[s];
             return (
-              <button key={s} onClick={() => actions.updateAppointment(appt.id, { status: s })}
+              <button key={s} disabled={saving} onClick={() => updateStatus(s)}
                 className={cls('text-xs px-2.5 py-1 rounded-full', m.bg, m.color,
                   appt.status === s ? 'ring-2 ring-offset-1 ' + m.ring : 'opacity-70 hover:opacity-100')}>
                 {m.label}
@@ -541,11 +644,12 @@ function AppointmentDetailModal({ appt, onClose, onStart }:{
         </div>
       </div>
 
+      {error && <div className="mt-3 text-sm text-flame-600">{error}</div>}
       <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-ink-100">
         <Button variant="ghost" icon={<MessageSquare className="size-4" />}>WhatsApp</Button>
         <Button variant="secondary" icon={<Phone className="size-4" />}>Ligar</Button>
-        <Button variant="danger" onClick={() => { actions.updateAppointment(appt.id, { status: 'cancelado' }); onClose(); }}>Cancelar</Button>
-        <Button onClick={onStart} icon={<Video className="size-4" />}>Iniciar atendimento</Button>
+        <Button variant="danger" disabled={saving} onClick={() => updateStatus('cancelado')}>Cancelar agendamento</Button>
+        <Button disabled={!['agendado', 'confirmado', 'aguardando', 'em_atendimento'].includes(appt.status)} onClick={() => onStart(appt.id)} icon={<Video className="size-4" />}>Iniciar atendimento</Button>
       </div>
     </Modal>
   );

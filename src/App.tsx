@@ -7,7 +7,6 @@ import Agenda from './pages/Agenda';
 import Patients from './pages/Patients';
 import PatientDetail from './pages/PatientDetail';
 import Records from './pages/Records';
-import RecordsDetail from './pages/RecordsDetail';
 import Attendance from './pages/Attendance';
 import Prescriptions from './pages/Prescriptions';
 import Exams from './pages/Exams';
@@ -39,7 +38,7 @@ export default function App() {
           <Route path="pacientes" element={<Patients />} />
           <Route path="pacientes/:id" element={<PatientDetail />} />
           <Route path="prontuarios" element={<Records />} />
-          <Route path="prontuarios/:id" element={<RecordsDetail />} />
+          <Route path="prontuarios/:id" element={<PatientDetail />} />
           <Route path="atendimento" element={<Attendance />} />
           <Route path="atendimento/:appointmentId" element={<Attendance />} />
           <Route path="prescricoes" element={<Prescriptions />} />

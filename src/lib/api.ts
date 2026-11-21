@@ -3,6 +3,8 @@
  * Handles all HTTP requests to the backend server
  */
 
+import type { AppointmentStatus } from './types';
+
 const API_BASE = 'http://localhost:3000/api';
 
 // Token management
@@ -43,7 +45,7 @@ async function request<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `API Error: ${response.statusText}`);
+    throw new Error(error.message || error.error || `API Error: ${response.statusText}`);
   }
 
   return response.json();
@@ -71,7 +73,7 @@ export const auth = {
     request<AuthResponse>('POST', '/auth/login', { email, password }),
 
   profile: () =>
-    request<any>('GET', '/auth/profile'),
+    request<{ id: string; email: string; name: string; role: string }>('GET', '/auth/profile'),
 };
 
 // ============================================================================
@@ -80,18 +82,21 @@ export const auth = {
 
 export interface PatientResponse {
   id: string;
-  code: string;
+  code: string | null;
   name: string;
   cpf: string;
-  birth: string;
-  sex: 'M' | 'F' | 'O';
-  phone: string;
-  email: string;
-  address: string;
-  insurance?: string;
-  allergies: string[];
-  medications: string[];
-  createdAt: string;
+  birth: string | null;
+  sex: 'M' | 'F' | 'O' | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  address: string | null;
+  emergency_contact: string | null;
+  insurance: string | null;
+  insurance_card: string | null;
+  allergies: string[] | null;
+  medications: string[] | null;
+  created_at: string | null;
 }
 
 export const patients = {
@@ -129,30 +134,70 @@ export const patients = {
 // 📝 NOTAS SOAP
 // ============================================================================
 
-export interface SOAPResponse {
-  id: string;
-  patientId: string;
-  professionalId: string;
-  date: string;
-  signed: boolean;
-  signed_at?: string;
+export interface SOAPDraft {
+  queixa: string;
+  hda: string;
+  antecedentes: string;
+  medicamentos: string;
+  alergias: string;
+  habitos: string;
+  pa: string;
+  fc: string;
+  fr: string;
+  temp: string;
+  spo2: string;
+  peso: string;
+  altura: string;
   subjetivo: string;
   objetivo: string;
   avaliacao: string;
   plano: string;
-  diagnostico?: string;
-  pa?: string;
-  fc?: string;
-  fr?: string;
-  temp?: string;
-  spo2?: string;
-  peso?: string;
-  altura?: string;
-  createdAt: string;
-  updatedAt: string;
+  hipotese: string;
+  diagnostico: string;
+  conduta: string;
+  retorno: string;
+}
+
+export interface SOAPResponse {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  professional_name?: string | null;
+  appointment_id: string | null;
+  signed: boolean;
+  version?: string;
+  queixa: string;
+  hda: string | null;
+  antecedentes: string | null;
+  medicamentos: string | null;
+  alergias: string | null;
+  habitos: string | null;
+  subjetivo: string;
+  objetivo: string;
+  avaliacao: string;
+  plano: string;
+  hipotese: string | null;
+  diagnostico: string | null;
+  conduta: string | null;
+  retorno: string | null;
+  pa: string | null;
+  fc: string | null;
+  fr: string | null;
+  temp: string | null;
+  spo2: string | null;
+  peso: string | null;
+  altura: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export const soap = {
+  getByAppointment: (appointmentId: string) =>
+    request<SOAPResponse | null>('GET', `/soap/appointment/${appointmentId}`),
+
+  saveAppointmentDraft: (appointmentId: string, data: SOAPDraft, expectedVersion: string | null) =>
+    request<SOAPResponse>('PUT', `/soap/appointment/${appointmentId}/draft`, { ...data, expectedVersion }),
+
   create: (data: {
     patientId: string;
     subjetivo: string;
@@ -194,6 +239,7 @@ export interface AppointmentResponse {
   id: string;
   patient_id: string;
   professional_id: string;
+  professional_name?: string | null;
   unit_id: string;
   date: string;
   start_time: string;
@@ -202,16 +248,22 @@ export interface AppointmentResponse {
   specialty?: string;
   procedure?: string;
   insurance?: string;
-  value?: number;
-  payment_method?: string;
+  value?: number | string | null;
+  payment_method?: 'particular' | 'convenio' | 'cortesia' | null;
   notes?: string;
   telehealth_url?: string;
-  status: 'agendado' | 'em_andamento' | 'concluido' | 'nao_compareceu' | 'cancelado';
+  status: AppointmentStatus | 'concluido' | 'nao_compareceu';
   created_at: string;
   updated_at: string;
 }
 
 export const appointments = {
+  start: (id: string) =>
+    request<AppointmentResponse>('POST', `/appointments/${id}/start`),
+
+  listProfessionals: () =>
+    request<{ id: string; name: string }[]>('GET', '/appointments/professionals'),
+
   create: (data: {
     patient_id: string;
     professional_id: string;

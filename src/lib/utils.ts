@@ -12,6 +12,18 @@ export function fmtDate(iso: string | null | undefined) {
   return `${d}/${m}/${y}`;
 }
 
+export function fmtTimestampDate(value: string | null | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Data inválida' : date.toLocaleDateString('pt-BR');
+}
+
+export function fmtTimestampDateTime(value: string | null | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Data inválida' : date.toLocaleString('pt-BR');
+}
+
 export function fmtDateLong(iso: string | null | undefined) {
   if (!iso) return '-';
   const d = new Date(iso+'T00:00:00');

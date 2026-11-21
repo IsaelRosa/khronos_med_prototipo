@@ -1,44 +1,42 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Card, PageHeader, Button, Modal, Field, inputCls, selectCls, textareaCls, Badge } from '../components/ui';
+import { Card, PageHeader, Button, Modal, Field, inputCls, selectCls, Badge } from '../components/ui';
 import { Search, Plus, Filter, UserPlus, Phone, Mail, AlertCircle, Loader } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { age, fmtDate } from '../lib/utils';
+import { age, fmtTimestampDate } from '../lib/utils';
 import { patients as patientsAPI, PatientResponse } from '../lib/api';
 
 export default function Patients() {
   const [patients, setPatients] = useState<PatientResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ key: number; error: string } | null>(null);
+  const [refresh, setRefresh] = useState(0);
   const [query, setQuery] = useState('');
   const [insurance, setInsurance] = useState('all');
   const [sex, setSex] = useState('all');
   const [newOpen, setNewOpen] = useState(false);
 
-  // Carregar pacientes da API
+  const loading = result?.key !== refresh;
+  const error = result?.key === refresh ? result.error : '';
+  const loadPatients = () => setRefresh(n => n + 1);
   useEffect(() => {
-    loadPatients();
-  }, []);
-
-  const loadPatients = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const data = await patientsAPI.list();
+    let active = true;
+    patientsAPI.list().then(data => {
+      if (!active) return;
       setPatients(data);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar pacientes');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      setResult({ key: refresh, error: '' });
+    }).catch((err: unknown) => {
+      if (!active) return;
+      console.error('Erro ao carregar pacientes:', err);
+      setResult({ key: refresh, error: err instanceof Error ? err.message : 'Erro ao carregar pacientes' });
+    });
+    return () => { active = false; };
+  }, [refresh]);
 
   const insurances = Array.from(new Set(patients.map(p => p.insurance).filter(Boolean))) as string[];
 
   const filtered = useMemo(() => patients.filter(p => {
     if (query) {
       const q = query.toLowerCase();
-      if (!p.name.toLowerCase().includes(q) && !p.cpf.includes(query) && !p.code.toLowerCase().includes(q)) return false;
+      if (!p.name.toLowerCase().includes(q) && !p.cpf.includes(query) && !p.code?.toLowerCase().includes(q) && !p.phone?.includes(query)) return false;
     }
     if (insurance !== 'all' && p.insurance !== insurance) return false;
     if (sex !== 'all' && p.sex !== sex) return false;
@@ -89,6 +87,8 @@ export default function Patients() {
               <p className="text-ink-500">Carregando pacientes...</p>
             </div>
           </div>
+        ) : error ? (
+          <div className="p-5 text-ink-500">Pacientes indisponíveis.</div>
         ) : patients.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
@@ -126,13 +126,13 @@ export default function Patients() {
                         </Link>
                       </td>
                       <td className="px-5 py-3 text-ink-600 font-mono text-[13px]">{p.cpf}</td>
-                      <td className="px-5 py-3 text-ink-600">{age(p.birth)} anos</td>
+                      <td className="px-5 py-3 text-ink-600">{p.birth ? `${age(p.birth)} anos` : 'Não informado'}</td>
                       <td className="px-5 py-3">
                         <div className="text-ink-700 text-xs flex items-center gap-1"><Phone className="size-3 text-ink-400" /> {p.phone}</div>
                         <div className="text-ink-500 text-xs flex items-center gap-1"><Mail className="size-3 text-ink-400" /> {p.email}</div>
                       </td>
                       <td className="px-5 py-3"><Badge tone={p.insurance === 'Particular' ? 'ink' : 'brand'}>{p.insurance || 'Sem convênio'}</Badge></td>
-                      <td className="px-5 py-3 text-ink-500 text-xs">{fmtDate(p.createdAt)}</td>
+                      <td className="px-5 py-3 text-ink-500 text-xs">{fmtTimestampDate(p.created_at)}</td>
                       <td className="px-5 py-3">
                         <Link to={`/pacientes/${p.id}`} className="text-brand-600 text-xs font-medium hover:text-brand-700">Ver prontuário →</Link>
                       </td>
@@ -168,7 +168,7 @@ function NewPatientModal({ open, onClose }:{ open: boolean; onClose: ()=>void })
   const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   async function save() {
-    if (!form.name || !form.cpf || !form.email || !form.phone) {
+    if (!form.name || !form.cpf || !form.email || !form.phone || !form.birth || !form.address) {
       setError('Por favor preencha todos os campos obrigatórios');
       return;
     }
@@ -182,8 +182,9 @@ function NewPatientModal({ open, onClose }:{ open: boolean; onClose: ()=>void })
         medications: []
       });
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao criar paciente');
+    } catch (err: unknown) {
+      console.error('Erro ao criar paciente:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao criar paciente');
     } finally {
       setLoading(false);
     }

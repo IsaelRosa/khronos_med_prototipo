@@ -25,7 +25,7 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.1",
     "ts-node": "^10.9.2",
-    "typescript": "^7.0.2"
+    "typescript": "~5.9.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
