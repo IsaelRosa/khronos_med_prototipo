@@ -1,0 +1,123 @@
+{
+  "info": {
+    "name": "Khronos Medical API",
+    "description": "API collection for Khronos Medical System",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "http://localhost:3000/api/auth/register", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "auth", "register"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"medico@hospital.com\",\n  \"password\": \"senha123\",\n  \"name\": \"Dr. João Silva\",\n  \"role\": \"medico\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "http://localhost:3000/api/auth/login", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "auth", "login"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"medico@hospital.com\",\n  \"password\": \"senha123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "http://localhost:3000/api/auth/profile", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "auth", "profile"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Patients",
+      "item": [
+        {
+          "name": "Create Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "http://localhost:3000/api/patients", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "patients"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"KH1001\",\n  \"name\": \"João Silva\",\n  \"cpf\": \"123.456.789-00\",\n  \"birth\": \"1990-05-15\",\n  \"sex\": \"M\",\n  \"phone\": \"(11) 99999-9999\",\n  \"whatsapp\": \"(11) 99999-9999\",\n  \"email\": \"joao@email.com\",\n  \"address\": \"Rua Principal, 123 - São Paulo/SP\",\n  \"emergencyContact\": \"Maria Silva — (11) 98888-8888\",\n  \"insurance\": \"Unimed\",\n  \"insuranceCard\": \"123456\",\n  \"allergies\": [\"Penicilina\"],\n  \"medications\": [\"Losartana 50mg\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get All Patients",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "http://localhost:3000/api/patients", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "patients"]}
+          }
+        },
+        {
+          "name": "Search Patients",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "http://localhost:3000/api/patients/search?q=João", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "patients", "search"], "query": [{"key": "q", "value": "João"}]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "SOAP Notes",
+      "item": [
+        {
+          "name": "Create SOAP Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "http://localhost:3000/api/soap", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "soap"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"uuid_do_paciente\",\n  \"queixa\": \"Dor de cabeça\",\n  \"subjetivo\": \"Paciente relata dor intensa\",\n  \"objetivo\": \"Exame físico normal\",\n  \"avaliacao\": \"Migrânea provável\",\n  \"plano\": \"Repouso e medicação\",\n  \"diagnostico\": \"G43\",\n  \"pa\": \"120/80\",\n  \"fc\": \"70\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get SOAP Notes by Patient",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "http://localhost:3000/api/soap/patient/{{patientId}}", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "soap", "patient", "{{patientId}}"]}
+          }
+        },
+        {
+          "name": "Sign SOAP Note",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "http://localhost:3000/api/soap/{{soapNoteId}}/sign", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["api", "soap", "{{soapNoteId}}", "sign"]}
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "token", "value": ""},
+    {"key": "patientId", "value": ""},
+    {"key": "soapNoteId", "value": ""}
+  ]
+}
