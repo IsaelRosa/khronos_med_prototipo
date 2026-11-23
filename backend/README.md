@@ -77,7 +77,7 @@ npm run build:deploy
 npm start
 ```
 
-Se o painel solicitar um arquivo de entrada Node.js, informe `server.js` na
+Se o painel solicitar um arquivo de entrada Node.js, informe `server.cjs` na
 raiz. O comando de build deve ser `npm run build:deploy`, não `npm run build`:
 o segundo compila apenas o frontend. O serviço precisa manter tanto `dist`
 quanto `backend/dist` e as dependências no ambiente de execução; publicar
@@ -164,6 +164,15 @@ MYSQL_SSL=true
 apenas em um ambiente de teste local isolado. Não coloque credenciais no
 repositório. A compatibilidade com a versão e configuração específica da
 Hostinger ainda precisa ser confirmada.
+
+Para popular um banco de teste isolado com dados fictícios, importe
+`dados-ficticios.mysql.sql` depois de `schema.mysql.sql`. O arquivo cria três
+usuários e cinco pacientes. Os usuários `admin-teste@example.invalid`,
+`medico-teste@example.invalid` e `recepcao-teste@example.invalid` usam a senha
+conhecida `senha123`. Execute o arquivo apenas uma vez, em um banco sem registros
+conflitantes; se ocorrer erro durante a importação, reverta a transação e
+verifique o banco antes de tentar novamente. Nunca use essas contas ou dados
+em produção nem em ambiente acessível ao público.
 
 O script `scripts/migrate-postgres-to-mysql.cjs` foi testado com dados fictícios
 em bancos isolados. Ele exige `SOURCE_DATABASE_URL` e `MYSQL_DATABASE_URL`,

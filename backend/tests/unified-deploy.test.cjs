@@ -12,10 +12,13 @@ async function unusedPort() {
   return port;
 }
 
-test('unified server serves the frontend and preserves API and health routes', async () => {
+for (const [mode, args] of [
+  ['direct', ['server.cjs']],
+  ['require', ['-e', "require('./server.cjs')"]],
+]) test(`unified server (${mode}) serves the frontend and preserves API and health routes`, async () => {
   const port = await unusedPort();
   const root = path.join(__dirname, '..', '..');
-  const child = spawn(process.execPath, ['server.js'], {
+  const child = spawn(process.execPath, args, {
     cwd: root,
     env: {
       ...process.env,

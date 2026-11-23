@@ -39,6 +39,20 @@ test('MySQL authentication and clinical flows in an isolated database', async ()
       return { status: response.status, body: await response.json() };
     };
 
+    const seed = await readFile(path.join(__dirname, '..', 'dados-ficticios.mysql.sql'), 'utf8');
+    for (const statement of seed.split(';').map(part => part.trim()).filter(Boolean)) await db.query(statement);
+    const [seedUsers] = await db.query('SELECT email, role FROM users ORDER BY email');
+    assert.deepEqual(seedUsers.map(user => user.role), ['admin', 'medico', 'recepcao']);
+    const [seedPatients] = await db.query('SELECT name FROM patients');
+    assert.equal(seedPatients.length, 5);
+    for (const user of seedUsers) {
+      const login = await send('POST', '/auth/login', { email: user.email, password: 'senha123' });
+      assert.equal(login.status, 200);
+      assert.equal(login.body.user.role, user.role);
+    }
+    await db.query('DELETE FROM patients');
+    await db.query('DELETE FROM users');
+
     const credentials = { email: 'teste@example.invalid', password: 'senha-de-teste', name: 'Teste', role: 'admin' };
     const registered = await send('POST', '/auth/register', credentials);
     assert.equal(registered.status, 201);
