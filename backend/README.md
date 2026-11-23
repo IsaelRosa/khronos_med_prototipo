@@ -65,7 +65,31 @@ O cadastro de usuários passa a exigir um token de administrador ou
 superadministrador; cadastros públicos permanecem disponíveis apenas fora de
 produção.
 
-### Publicação para testes
+### Publicação em um único serviço Node.js
+
+Configure a raiz do repositório como diretório do serviço e use Node.js 20.19+
+ou 22.12+. A instalação deve incluir as dependências de desenvolvimento, pois
+elas são necessárias à compilação:
+
+```bash
+npm ci --include=dev
+npm run build:deploy
+npm start
+```
+
+O build compila o frontend e a API; o servidor entrega ambos na porta definida
+pela hospedagem. O frontend usa `/api` na mesma origem. Se
+`VITE_API_BASE_URL` estiver definida no ambiente de build, ela sobrescreve esse
+valor e deve apontar para a API desejada. Configure `NODE_ENV=production`,
+`DATABASE_URL` e `JWT_SECRET` no serviço, e prepare o banco conforme descrito
+abaixo. Não publique segredos no repositório. O health check `/health` não
+verifica a conexão com o banco.
+
+Esta configuração exige uma hospedagem que execute um processo Node.js
+persistente; publicar somente a pasta `dist` não inicia a API. Consulte a
+limitação de segurança abaixo antes de tornar o serviço público.
+
+### Publicação separada para testes
 
 O frontend e a API precisam ser publicados separadamente, a menos que a hospedagem
 configure um proxy para a API. A aplicação Node.js deve usar a pasta `backend`,

@@ -1,6 +1,8 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import authRoutes from './routes/auth';
 import patientRoutes from './routes/patients';
 import soapRoutes from './routes/soap';
@@ -43,6 +45,22 @@ app.use('/api/exam-orders', examRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
+if (process.argv.includes('--serve-frontend')) {
+  const frontendDir = path.resolve(__dirname, '../../dist');
+  const indexFile = path.join(frontendDir, 'index.html');
+  if (!existsSync(indexFile)) {
+    throw new Error('Frontend não encontrado. Execute npm run build:deploy na raiz do projeto.');
+  }
+  app.use(express.static(frontendDir));
+  app.get(/.*/, (req, res, next) => {
+    if (req.path === '/api' || req.path.startsWith('/api/') ||
+        req.path === '/health' || path.extname(req.path) || !req.accepts('html')) {
+      return next();
+    }
+    res.sendFile(indexFile);
+  });
+}
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
