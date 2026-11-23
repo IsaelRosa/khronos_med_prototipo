@@ -17,11 +17,13 @@ import Reports from './pages/Reports';
 import Communication from './pages/Communication';
 import Settings from './pages/Settings';
 import PublicBooking from './pages/PublicBooking';
+import Home from './pages/Home';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route index element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/agendar/:clinicSlug" element={<PublicBooking />} />
         <Route
@@ -32,7 +34,6 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/painel" replace />} />
           <Route path="painel" element={<Dashboard />} />
           <Route path="agenda" element={<Agenda />} />
           <Route path="pacientes" element={<Patients />} />

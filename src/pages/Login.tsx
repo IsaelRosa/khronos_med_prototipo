@@ -1,5 +1,6 @@
 import { Activity, ArrowRight, Shield, Zap, Users } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/useAuth';
 
 export default function Login() {
@@ -35,6 +36,9 @@ export default function Login() {
             <div className="size-11 rounded-xl bg-brand-700 grid place-items-center"><Activity className="size-6 text-white" /></div>
             <div><div className="font-display text-2xl text-ink-900 leading-none">Khronos</div><div className="text-[11px] uppercase tracking-widest text-ink-500">Tecnologia e Sistemas</div></div>
           </div>
+          <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-brand-600 hover:text-brand-700 mb-6">
+            <span aria-hidden="true">←</span> Voltar ao início
+          </Link>
           <h1 className="font-display text-[36px] leading-tight text-ink-900">Bem-vindo de volta</h1>
           <p className="text-ink-500 mt-2 mb-8">Acesse sua plataforma de gestão clínica.</p>
 
