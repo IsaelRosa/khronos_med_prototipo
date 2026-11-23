@@ -77,6 +77,12 @@ npm run build:deploy
 npm start
 ```
 
+Se o painel solicitar um arquivo de entrada Node.js, informe `server.js` na
+raiz. O comando de build deve ser `npm run build:deploy`, não `npm run build`:
+o segundo compila apenas o frontend. O serviço precisa manter tanto `dist`
+quanto `backend/dist` e as dependências no ambiente de execução; publicar
+apenas o diretório de saída `dist` não executa o servidor.
+
 O build compila o frontend e a API; o servidor entrega ambos na porta definida
 pela hospedagem. O frontend usa `/api` na mesma origem. Se
 `VITE_API_BASE_URL` estiver definida no ambiente de build, ela sobrescreve esse

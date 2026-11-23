@@ -15,7 +15,7 @@ async function unusedPort() {
 test('unified server serves the frontend and preserves API and health routes', async () => {
   const port = await unusedPort();
   const root = path.join(__dirname, '..', '..');
-  const child = spawn(process.execPath, ['backend/dist/server.js', '--serve-frontend'], {
+  const child = spawn(process.execPath, ['server.js'], {
     cwd: root,
     env: {
       ...process.env,
