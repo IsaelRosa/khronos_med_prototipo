@@ -69,7 +69,9 @@ produção.
 
 Configure a raiz do repositório como diretório do serviço e use Node.js 20.19+
 ou 22.12+. A instalação deve incluir as dependências de desenvolvimento, pois
-elas são necessárias à compilação:
+elas são necessárias à compilação. O `.npmrc` da raiz solicita que o npm
+inclua essas dependências mesmo com `NODE_ENV=production`; confirme que a
+hospedagem instala a partir da raiz e não sobrescreve essa configuração:
 
 ```bash
 npm ci --include=dev
