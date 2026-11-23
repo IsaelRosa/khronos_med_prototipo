@@ -57,7 +57,42 @@ NODE_ENV=development
 DATABASE_URL=postgresql://postgres:password@localhost:5432/khronos_med
 JWT_SECRET=sua_chave_secreta_aqui_mude_em_producao
 JWT_EXPIRES_IN=7d
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:5175
 ```
+
+Em produção, `JWT_SECRET` é obrigatória e deve ter pelo menos 32 caracteres.
+O cadastro de usuários passa a exigir um token de administrador ou
+superadministrador; cadastros públicos permanecem disponíveis apenas fora de
+produção.
+
+### Publicação para testes
+
+O frontend e a API precisam ser publicados separadamente, a menos que a hospedagem
+configure um proxy para a API. A aplicação Node.js deve usar a pasta `backend`,
+executar `npm run build` e iniciar com `npm start`. Configure nela `NODE_ENV`,
+`DATABASE_URL`, `JWT_SECRET` e `CORS_ORIGINS` no painel da hospedagem; use uma
+chave JWT longa e aleatória e não publique credenciais no repositório. `PORT` é
+normalmente fornecida pela hospedagem. A URL do PostgreSQL deve usar os requisitos
+de conexão segura do provedor. Execute `schema.sql` em um banco novo e exclusivo
+para testes; o banco local e seus usuários não são copiados automaticamente.
+
+`CORS_ORIGINS` é uma lista de origens do frontend separadas por vírgula, sem
+caminho nem barra final. Por exemplo:
+
+```env
+CORS_ORIGINS=https://seu-frontend.example.com
+```
+
+No deploy do frontend, defina `VITE_API_BASE_URL` **antes do build** com a URL
+HTTPS pública da API incluindo `/api`, por exemplo
+`https://sua-api.example.com/api`, e publique novamente o frontend. A variável
+fica visível no navegador e não deve conter segredos. Sem essa configuração, o
+build de produção informará um erro ao tentar acessar a API; em desenvolvimento,
+usa `http://localhost:3000/api` por padrão.
+
+Verifique a API em `https://sua-api.example.com/health` e depois teste o login
+com uma conta criada no banco de testes. O health check não verifica o banco.
+Veja as limitações de segurança abaixo antes de tornar a API pública.
 
 ### 5. Executar o Servidor
 
@@ -80,9 +115,37 @@ Ao abrir um paciente ou suas notas, os agendamentos relacionados são listados i
 
 O atendimento permite apenas salvar rascunhos. Assinatura certificada e encerramento não estão disponíveis; salvar o rascunho não finaliza a consulta nem gera lançamento financeiro.
 
-**Limitação de segurança:** a API ainda não restringe a leitura de informações clínicas pelo vínculo do profissional com o paciente, e o cadastro público aceita o perfil informado. Não utilize dados clínicos reais até que os controles de acesso e a proteção operacional sejam implementados e validados. O protótipo, por si só, não comprova conformidade com a LGPD ou com normas profissionais.
+**Limitação de segurança:** a API ainda não restringe a leitura de informações clínicas pelo vínculo do profissional com o paciente. Fora de produção, o cadastro público aceita o perfil informado. Não utilize dados clínicos reais até que os controles de acesso e a proteção operacional sejam implementados e validados. O protótipo, por si só, não comprova conformidade com a LGPD ou com normas profissionais.
 
 Para testar a persistência existente sem usar o banco da aplicação, execute `node --test tests\isolated-flow.test.cjs` dentro de `backend`. O teste cria e remove um banco exclusivo com dados de teste; o usuário configurado em `DATABASE_URL` precisa ter permissão `CREATEDB`.
+
+### MySQL experimental
+
+O PostgreSQL continua sendo o padrão. Para testar o backend com MySQL 8, crie
+um banco vazio e exclusivo, execute `schema.mysql.sql` nele e configure:
+
+```env
+DB_DRIVER=mysql
+MYSQL_DATABASE_URL=mysql://USUARIO:SENHA@HOST:3306/BANCO
+MYSQL_SSL=true
+```
+
+`MYSQL_SSL=true` ativa TLS com validação de certificado; omita essa variável
+apenas em um ambiente de teste local isolado. Não coloque credenciais no
+repositório. A compatibilidade com a versão e configuração específica da
+Hostinger ainda precisa ser confirmada.
+
+O script `scripts/migrate-postgres-to-mysql.cjs` foi testado com dados fictícios
+em bancos isolados. Ele exige `SOURCE_DATABASE_URL` e `MYSQL_DATABASE_URL`,
+recusa tabelas de destino não vazias e verifica os registros copiados. O destino
+deve ter recebido `schema.mysql.sql`; a API de destino deve permanecer desligada
+durante a cópia. Não migre dados reais sem backup, validação completa e revisão
+dos controles de acesso. Não use `MYSQL_TLS=disabled` fora de testes isolados.
+
+Os testes `tests/mysql-flow.test.cjs` e `tests/mysql-migration.test.cjs` exigem
+bancos de teste vazios e exclusivos; nunca os execute em bancos existentes da
+aplicação. O primeiro recebe `MYSQL_DATABASE_URL`; o segundo recebe
+`TEST_PG_DATABASE_URL` e `TEST_MYSQL_DATABASE_URL`.
 
 ## 📚 API Endpoints
 

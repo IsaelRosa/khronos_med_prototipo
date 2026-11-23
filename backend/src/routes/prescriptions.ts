@@ -1,17 +1,13 @@
 import express from 'express';
-import {
-  createPrescription,
-  getPrescriptionsByPatient,
-  getPrescriptionById,
-  updatePrescription,
-  cancelPrescription,
-  getActivePrescriptions,
-  getPrescriptionBySoapNote,
-  deletePrescription
-} from '../controllers/prescriptionController';
+import * as postgres from '../controllers/prescriptionController';
+import * as mysql from '../mysql/prescriptionController';
+import { databaseDriver } from '../config/driver';
 import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
+const { createPrescription, getPrescriptionsByPatient, getPrescriptionById, updatePrescription,
+  cancelPrescription, getActivePrescriptions, getPrescriptionBySoapNote, deletePrescription } =
+  databaseDriver === 'mysql' ? mysql : postgres;
 
 // All routes require authentication
 router.use(authMiddleware);

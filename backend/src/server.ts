@@ -7,18 +7,26 @@ import soapRoutes from './routes/soap';
 import appointmentRoutes from './routes/appointments';
 import prescriptionRoutes from './routes/prescriptions';
 import examRoutes from './routes/exams';
+import { getJwtSecret } from './utils/jwt';
+import { databaseDriver } from './config/driver';
+import { getPool } from './mysql/database';
 
 dotenv.config();
+getJwtSecret();
+if (databaseDriver === 'mysql') getPool();
 
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean)
+  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'];
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+    origin: allowedOrigins,
     credentials: true,
   })
 );

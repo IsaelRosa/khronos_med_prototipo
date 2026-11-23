@@ -1,17 +1,12 @@
 import { Router } from 'express';
-import {
-  createSOAPNote,
-  getSOAPNotesByPatient,
-  getSOAPNoteById,
-  updateSOAPNote,
-  signSOAPNote,
-  deleteSOAPNote,
-  getSOAPNoteByAppointment,
-  saveAppointmentDraft,
-} from '../controllers/soapController';
+import * as postgres from '../controllers/soapController';
+import * as mysql from '../mysql/soapController';
+import { databaseDriver } from '../config/driver';
 import { authMiddleware, medicoMiddleware } from '../middleware/auth';
 
 const router = Router();
+const { createSOAPNote, getSOAPNotesByPatient, getSOAPNoteById, updateSOAPNote, signSOAPNote,
+  deleteSOAPNote, getSOAPNoteByAppointment, saveAppointmentDraft } = databaseDriver === 'mysql' ? mysql : postgres;
 
 router.post('/', authMiddleware, medicoMiddleware, createSOAPNote);
 router.get('/appointment/:appointmentId', authMiddleware, getSOAPNoteByAppointment);

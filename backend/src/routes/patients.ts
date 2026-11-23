@@ -1,15 +1,12 @@
 import { Router } from 'express';
-import {
-  createPatient,
-  getAllPatients,
-  getPatientById,
-  updatePatient,
-  deletePatient,
-  searchPatients,
-} from '../controllers/patientController';
+import * as postgres from '../controllers/patientController';
+import * as mysql from '../mysql/patientController';
+import { databaseDriver } from '../config/driver';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
+const { createPatient, getAllPatients, getPatientById, updatePatient, deletePatient, searchPatients } =
+  databaseDriver === 'mysql' ? mysql : postgres;
 
 router.post('/', authMiddleware, createPatient);
 router.get('/', authMiddleware, getAllPatients);

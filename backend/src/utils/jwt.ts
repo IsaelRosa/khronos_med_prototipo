@@ -1,10 +1,18 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
+export const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 32)) {
+    throw new Error('JWT_SECRET deve conter pelo menos 32 caracteres em produção.');
+  }
+  return secret || 'secret';
+};
+
 export const generateToken = (userId: string, email: string, name: string, role: string) => {
   return jwt.sign(
     { id: userId, email, name, role },
-    process.env.JWT_SECRET || 'secret',
+    getJwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
   );
 };

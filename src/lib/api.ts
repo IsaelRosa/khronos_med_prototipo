@@ -5,7 +5,8 @@
 
 import type { AppointmentStatus } from './types';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL?.trim() ||
+  (import.meta.env.DEV ? 'http://localhost:3000/api' : '')).replace(/\/+$/, '');
 
 // Token management
 export function getToken(): string | null {
@@ -26,6 +27,9 @@ async function request<T>(
   endpoint: string,
   body?: any
 ): Promise<T> {
+  if (!API_BASE) {
+    throw new Error('API não configurada. Defina VITE_API_BASE_URL antes de publicar o frontend.');
+  }
   const url = `${API_BASE}${endpoint}`;
   const token = getToken();
 

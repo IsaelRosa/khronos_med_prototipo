@@ -1,28 +1,26 @@
 import express from 'express';
-import {
-  createAppointment,
-  getAppointmentsByPatient,
-  getAppointmentById,
-  getAppointmentsByDateRange,
-  updateAppointment,
-  cancelAppointment,
-  getTodayAppointments,
-  startAppointment
-} from '../controllers/appointmentController';
+import * as postgres from '../controllers/appointmentController';
+import * as mysql from '../mysql/appointmentController';
+import { databaseDriver } from '../config/driver';
 import { authMiddleware, medicoMiddleware } from '../middleware/auth';
 import pool from '../config/database';
+import { getPool, rows, Row } from '../mysql/database';
 
 const router = express.Router();
+const { createAppointment, getAppointmentsByPatient, getAppointmentById, getAppointmentsByDateRange,
+  updateAppointment, cancelAppointment, getTodayAppointments, startAppointment } =
+  databaseDriver === 'mysql' ? mysql : postgres;
 
 // All routes require authentication
 router.use(authMiddleware);
 
 router.get('/professionals', async (_req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT id, name FROM users WHERE role = 'medico' ORDER BY name"
-    );
-    res.json(result.rows);
+    const sql = "SELECT id, name FROM users WHERE role = 'medico' ORDER BY name";
+    const professionals = databaseDriver === 'mysql'
+      ? await rows<Row>(getPool(), sql)
+      : (await pool.query(sql)).rows;
+    res.json(professionals);
   } catch (error) {
     console.error('Error fetching professionals:', error);
     res.status(500).json({ message: 'Erro ao carregar profissionais' });
